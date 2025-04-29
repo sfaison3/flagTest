@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PostHog Client Service Test</title>
+    <!-- Include PostHog library directly from CDN -->
+    <script src="https://unpkg.com/posthog-js@1.96.1/dist/posthog.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .card {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+        }
+        button {
+            padding: 8px 12px;
+            margin-right: 8px;
+            margin-bottom: 8px;
+            cursor: pointer;
+        }
+        #output {
+            background-color: #f5f5f5;
+            padding: 15px;
+            border-radius: 4px;
+            min-height: 200px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>PostHog Client Service Test</h1>
+
+    <div class="card">
+        <h2>User Identification</h2>
+        <button id="identify">Identify User</button>
+        <button id="reset">Reset User</button>
+    </div>
+
+    <div class="card">
+        <h2>Event Tracking</h2>
+        <button id="capture">Capture Event</button>
+        <button id="pageview">Track Page View</button>
+    </div>
+
+    <div class="card">
+        <h2>Feature Flags</h2>
+        <button id="checkFlag">Check Feature Flag</button>
+        <button id="getFlagValue">Get Flag Value</button>
+        <button id="getAllFlags">Get All Enabled Flags</button>
+    </div>
+
+    <div class="card">
+        <h2>Groups</h2>
+        <button id="assignGroup">Assign to Group</button>
+    </div>
+
+    <h3>Output:</h3>
+    <div id="output"></div>
+
+    <script>
+        // Define the config for PostHog
+	/* Claude put an api key in the browser? WTF?? */
+        const POSTHOG_API_KEY = "";
+        const POSTHOG_HOST = "https://us.i.posthog.com";
+
+        // Simple implementation of PostHogClientService
+        class PostHogClientService {
+            init(apiKey = POSTHOG_API_KEY, options = {}) {
+                posthog.init(apiKey, {
+                    api_host: options.apiHost || POSTHOG_HOST,
+                    loaded: (posthog) => {
+                        logOutput('PostHog loaded successfully!');
+                    }
+                });
+            }
+
+            identify(distinctId, userProperties) {
+                posthog.identify(distinctId, userProperties);
+            }
+
+            reset() {
+                posthog.reset();
+            }
+
+            capture(eventData) {
+                posthog.capture(eventData.name, eventData.properties);
+            }
+
+            pageView(url) {
+                const pageUrl = url || window.location.href;
+                this.capture({
+                    name: "$pageview",
+                    properties: {
+                        $current_url: pageUrl
+                    }
+                });
+            }
+
+            isFeatureEnabled(key, defaultValue = false) {
+                try {
+                    return posthog.isFeatureEnabled(key) ?? defaultValue;
+                } catch (error) {
+                    console.error(`Error checking feature flag ${key}:`, error);
+                    return defaultValue;
+                }
+            }
+
+            getFeatureFlag(key, defaultValue) {
+                try {
+                    return posthog.getFeatureFlag(key, defaultValue);
+                } catch (error) {
+                    console.error(`Error getting feature flag ${key}:`, error);
+                    return defaultValue;
+                }
+            }
+
+            getEnabledFeatureFlags() {
+                try {
+                    return posthog.getActiveFlags();
+                } catch (error) {
+                    console.error("Error getting enabled feature flags:", error);
+                    return [];
+                }
+            }
+
+            onFeatureFlags(callback) {
+                posthog.onFeatureFlags(callback);
+            }
+
+            group(groupType, groupKey, groupProperties) {
+                posthog.group(groupType, groupKey, groupProperties);
+            }
+        }
+
+        // Create and initialize the service
+        const posthogTest = new PostHogClientService();
+        posthogTest.init();
+        
+        function logOutput(message) {
+            const output = document.getElementById('output');
+            const timestamp = new Date().toLocaleTimeString();
+            output.textContent += `[${timestamp}] ${message}\n`;
+        }
+
+        // Set up event listeners for the buttons
+        document.getElementById('identify').addEventListener('click', () => {
+            const userId = 'user-' + Math.floor(Math.random() * 1000);
+            posthogTest.identify(userId, { name: 'Test User', email: 'test@example.com' });
+            logOutput(`Identified user: ${userId}`);
+        });
+
+        document.getElementById('reset').addEventListener('click', () => {
+            posthogTest.reset();
+            logOutput('Reset user identity');
+        });
+
+        document.getElementById('capture').addEventListener('click', () => {
+            posthogTest.capture({
+                name: 'test_event',
+                properties: {
+                    value: Math.floor(Math.random() * 100),
+                    source: 'test page'
+                }
+            });
+            logOutput('Captured test_event');
+        });
+
+        document.getElementById('pageview').addEventListener('click', () => {
+            posthogTest.pageView('https://example.com/test-page');
+            logOutput('Tracked page view for https://example.com/test-page');
+        });
+
+        document.getElementById('checkFlag').addEventListener('click', () => {
+            const flagName = 'test-feature';
+            const isEnabled = posthogTest.isFeatureEnabled(flagName);
+            logOutput(`Feature flag "${flagName}" is ${isEnabled ? 'enabled' : 'disabled'}`);
+        });
+
+        document.getElementById('getFlagValue').addEventListener('click', () => {
+            const flagName = 'test-feature-with-value';
+            const value = posthogTest.getFeatureFlag(flagName, 'default value');
+            logOutput(`Feature flag "${flagName}" value: ${JSON.stringify(value)}`);
+        });
+
+        document.getElementById('getAllFlags').addEventListener('click', () => {
+            const flags = posthogTest.getEnabledFeatureFlags();
+            logOutput(`Enabled feature flags: ${JSON.stringify(flags)}`);
+        });
+
+        document.getElementById('assignGroup').addEventListener('click', () => {
+            posthogTest.group('company', 'test-company-id', { name: 'Test Company' });
+            logOutput('Assigned user to group: company=test-company-id');
+        });
+    </script>
+</body>
+</html>
