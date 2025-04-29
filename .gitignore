@@ -25,6 +25,8 @@ build/
 .idea/
 *.swp
 *.swo
+*.code-workspace
+MyWorkspace.code-workspace
 
 # OS specific
 .DS_Store
